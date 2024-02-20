@@ -61,150 +61,156 @@ export async function POST(request: Request) {
 
     const firstResponse = await openai.chat.completions.create({
       model: chatSettings.model as ChatCompletionCreateParamsBase["model"],
-      messages,
-      tools: allTools.length > 0 ? allTools : undefined
+      messages
     })
 
     const message = firstResponse.choices[0].message
-    messages.push(message)
+
+    const response = await fetch("https://api.translate.tomyo.mn/predict", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ text: message.content })
+    })
+    const translatedContent = await response.text()
+
+    messages.push({ ...message, content: translatedContent })
     const toolCalls = message.tool_calls || []
 
-    if (toolCalls.length === 0) {
-      return new Response(message.content, {
-        headers: {
-          "Content-Type": "application/json"
-        }
-      })
-    }
+    // if (toolCalls.length > 0) {
+    //   for (const toolCall of toolCalls) {
+    //     const functionCall = toolCall.function
+    //     const functionName = functionCall.name
+    //     const argumentsString = toolCall.function.arguments.trim()
+    //     const parsedArgs = JSON.parse(argumentsString)
 
-    if (toolCalls.length > 0) {
-      for (const toolCall of toolCalls) {
-        const functionCall = toolCall.function
-        const functionName = functionCall.name
-        const argumentsString = toolCall.function.arguments.trim()
-        const parsedArgs = JSON.parse(argumentsString)
+    //     // Find the schema detail that contains the function name
+    //     const schemaDetail = schemaDetails.find(detail =>
+    //       Object.values(detail.routeMap).includes(functionName)
+    //     )
 
-        // Find the schema detail that contains the function name
-        const schemaDetail = schemaDetails.find(detail =>
-          Object.values(detail.routeMap).includes(functionName)
-        )
+    //     if (!schemaDetail) {
+    //       throw new Error(`Function ${functionName} not found in any schema`)
+    //     }
 
-        if (!schemaDetail) {
-          throw new Error(`Function ${functionName} not found in any schema`)
-        }
+    //     const pathTemplate = Object.keys(schemaDetail.routeMap).find(
+    //       key => schemaDetail.routeMap[key] === functionName
+    //     )
 
-        const pathTemplate = Object.keys(schemaDetail.routeMap).find(
-          key => schemaDetail.routeMap[key] === functionName
-        )
+    //     if (!pathTemplate) {
+    //       throw new Error(`Path for function ${functionName} not found`)
+    //     }
 
-        if (!pathTemplate) {
-          throw new Error(`Path for function ${functionName} not found`)
-        }
+    //     const path = pathTemplate.replace(/:(\w+)/g, (_, paramName) => {
+    //       const value = parsedArgs.parameters[paramName]
+    //       if (!value) {
+    //         throw new Error(
+    //           `Parameter ${paramName} not found for function ${functionName}`
+    //         )
+    //       }
+    //       return encodeURIComponent(value)
+    //     })
 
-        const path = pathTemplate.replace(/:(\w+)/g, (_, paramName) => {
-          const value = parsedArgs.parameters[paramName]
-          if (!value) {
-            throw new Error(
-              `Parameter ${paramName} not found for function ${functionName}`
-            )
-          }
-          return encodeURIComponent(value)
-        })
+    //     if (!path) {
+    //       throw new Error(`Path for function ${functionName} not found`)
+    //     }
 
-        if (!path) {
-          throw new Error(`Path for function ${functionName} not found`)
-        }
+    //     // Determine if the request should be in the body or as a query
+    //     const isRequestInBody = schemaDetail.requestInBody
+    //     let data = {}
 
-        // Determine if the request should be in the body or as a query
-        const isRequestInBody = schemaDetail.requestInBody
-        let data = {}
+    //     if (isRequestInBody) {
+    //       // If the type is set to body
+    //       let headers = {
+    //         "Content-Type": "application/json"
+    //       }
 
-        if (isRequestInBody) {
-          // If the type is set to body
-          let headers = {
-            "Content-Type": "application/json"
-          }
+    //       // Check if custom headers are set
+    //       const customHeaders = schemaDetail.headers // Moved this line up to the loop
+    //       // Check if custom headers are set and are of type string
+    //       if (customHeaders && typeof customHeaders === "string") {
+    //         let parsedCustomHeaders = JSON.parse(customHeaders) as Record<
+    //           string,
+    //           string
+    //         >
 
-          // Check if custom headers are set
-          const customHeaders = schemaDetail.headers // Moved this line up to the loop
-          // Check if custom headers are set and are of type string
-          if (customHeaders && typeof customHeaders === "string") {
-            let parsedCustomHeaders = JSON.parse(customHeaders) as Record<
-              string,
-              string
-            >
+    //         headers = {
+    //           ...headers,
+    //           ...parsedCustomHeaders
+    //         }
+    //       }
 
-            headers = {
-              ...headers,
-              ...parsedCustomHeaders
-            }
-          }
+    //       const fullUrl = schemaDetail.url + path
 
-          const fullUrl = schemaDetail.url + path
+    //       const bodyContent = parsedArgs.requestBody || parsedArgs
 
-          const bodyContent = parsedArgs.requestBody || parsedArgs
+    //       const requestInit = {
+    //         method: "POST",
+    //         headers,
+    //         body: JSON.stringify(bodyContent) // Use the extracted requestBody or the entire parsedArgs
+    //       }
 
-          const requestInit = {
-            method: "POST",
-            headers,
-            body: JSON.stringify(bodyContent) // Use the extracted requestBody or the entire parsedArgs
-          }
+    //       const response = await fetch(fullUrl, requestInit)
 
-          const response = await fetch(fullUrl, requestInit)
+    //       if (!response.ok) {
+    //         data = {
+    //           error: response.statusText
+    //         }
+    //       } else {
+    //         data = await response.json()
+    //       }
+    //     } else {
+    //       // If the type is set to query
+    //       const queryParams = new URLSearchParams(
+    //         parsedArgs.parameters
+    //       ).toString()
+    //       const fullUrl =
+    //         schemaDetail.url + path + (queryParams ? "?" + queryParams : "")
 
-          if (!response.ok) {
-            data = {
-              error: response.statusText
-            }
-          } else {
-            data = await response.json()
-          }
-        } else {
-          // If the type is set to query
-          const queryParams = new URLSearchParams(
-            parsedArgs.parameters
-          ).toString()
-          const fullUrl =
-            schemaDetail.url + path + (queryParams ? "?" + queryParams : "")
+    //       let headers = {}
 
-          let headers = {}
+    //       // Check if custom headers are set
+    //       const customHeaders = schemaDetail.headers
+    //       if (customHeaders && typeof customHeaders === "string") {
+    //         headers = JSON.parse(customHeaders)
+    //       }
 
-          // Check if custom headers are set
-          const customHeaders = schemaDetail.headers
-          if (customHeaders && typeof customHeaders === "string") {
-            headers = JSON.parse(customHeaders)
-          }
+    //       const response = await fetch(fullUrl, {
+    //         method: "GET",
+    //         headers: headers
+    //       })
 
-          const response = await fetch(fullUrl, {
-            method: "GET",
-            headers: headers
-          })
+    //       if (!response.ok) {
+    //         data = {
+    //           error: response.statusText
+    //         }
+    //       } else {
+    //         data = await response.json()
+    //       }
+    //     }
 
-          if (!response.ok) {
-            data = {
-              error: response.statusText
-            }
-          } else {
-            data = await response.json()
-          }
-        }
+    //     messages.push({
+    //       tool_call_id: toolCall.id,
+    //       role: "tool",
+    //       name: functionName,
+    //       content: JSON.stringify(data)
+    //     })
+    //   }
+    // }
 
-        messages.push({
-          tool_call_id: toolCall.id,
-          role: "tool",
-          name: functionName,
-          content: JSON.stringify(data)
-        })
+    // const secondResponse = await openai.chat.completions.create({
+    //   model: chatSettings.model as ChatCompletionCreateParamsBase["model"],
+    //   messages,
+    //   stream: true
+    // })
+
+    //const stream = OpenAIStream(secondResponse)
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(translatedContent)
       }
-    }
-
-    const secondResponse = await openai.chat.completions.create({
-      model: chatSettings.model as ChatCompletionCreateParamsBase["model"],
-      messages,
-      stream: true
     })
-
-    const stream = OpenAIStream(secondResponse)
 
     return new StreamingTextResponse(stream)
   } catch (error: any) {

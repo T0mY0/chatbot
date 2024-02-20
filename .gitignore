@@ -36,6 +36,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+.vscode
 .VSCodeCounter
 tool-schemas
 custom-prompts

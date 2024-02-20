@@ -1,0 +1,50 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+      "title": "Translate Mongolian text to English",
+      "description": "Translates Mongolian prompts to English",
+      "version": "v1.0.0"
+    },
+    "servers": [
+      {
+        "url": "https://api.translate.tomyo.mn"
+      }
+    ],
+    "paths": {
+      "/predict": {
+        "post": {
+          "description": "Translates Mongolian prompts to English",
+          "operationId": "TranslateMonToEng",
+          "parameters": [
+            {
+              "name": "text",
+              "in": "request",
+              "description": "Translate text",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "deprecated": false
+        }
+      }
+    },
+    "components": {
+      "schemas": {}
+    }
+  }
