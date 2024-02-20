@@ -63,11 +63,16 @@ export async function POST(request: Request) {
       model: chatSettings.model as ChatCompletionCreateParamsBase["model"],
       messages
     })
+    console.warn("========Called tool request============")
 
     const message = firstResponse.choices[0].message
 
     let translatedContent = message.content
     try {
+      console.warn(
+        "===========Send translation request==============",
+        translatedContent
+      )
       const response = await fetch("https://api.translate.tomyo.mn/predict", {
         method: "POST",
         headers: {
@@ -75,10 +80,15 @@ export async function POST(request: Request) {
         },
         body: JSON.stringify({ text: message.content })
       })
-      const translatedContent = await response.text()
+      translatedContent = await response.text()
+      console.warn(
+        "===========Translated content==============",
+        translatedContent
+      )
 
       messages.push({ ...message, content: translatedContent })
     } catch (error: any) {
+      console.warn("Error translating content", error)
       console.error("Error translating content", error)
     }
     const toolCalls = message.tool_calls || []
