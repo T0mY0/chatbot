@@ -66,16 +66,21 @@ export async function POST(request: Request) {
 
     const message = firstResponse.choices[0].message
 
-    const response = await fetch("https://api.translate.tomyo.mn/predict", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ text: message.content })
-    })
-    const translatedContent = await response.text()
+    let translatedContent = message.content
+    try {
+      const response = await fetch("https://api.translate.tomyo.mn/predict", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ text: message.content })
+      })
+      const translatedContent = await response.text()
 
-    messages.push({ ...message, content: translatedContent })
+      messages.push({ ...message, content: translatedContent })
+    } catch (error: any) {
+      console.error("Error translating content", error)
+    }
     const toolCalls = message.tool_calls || []
 
     // if (toolCalls.length > 0) {
