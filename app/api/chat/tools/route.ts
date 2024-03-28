@@ -42,6 +42,7 @@ export async function POST(request: Request) {
     const stream = new ReadableStream({
       start(controller) {
         controller.enqueue(translatedContent)
+        controller.close()
       }
     })
 
