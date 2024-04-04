@@ -13,46 +13,82 @@ export async function POST(request: Request) {
     messages: any[]
     selectedTools: Tables<"tools">[]
   }
-
+  const responses: string[] = []
   try {
     // last prompt
     const message = messages[messages.length - 1]
 
-    let translatedContent = message.content
-    console.warn("===========Source Message============== ", message)
-    try {
-      const response = await fetch("https://api.translate.tomyo.mn/predict", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ text: message.content })
-      })
-      translatedContent = await response.text()
-      console.warn(
-        "===========Translated content==============",
-        translatedContent
-      )
+    for (const selectedTool of selectedTools) {
+      try {
+        const convertedSchema = await openapiToFunctions(
+          JSON.parse(selectedTool.schema as string)
+        )
+        // convertedSchema example:
+        // {
+        //   info: {
+        //     title: 'Translate data using t0my0-18m model API',
+        //     description: 'Translate data using t0my0-18m model API',
+        //     server: 'https://api.translate.tomyo.mn'
+        //   },
+        //   routes: [
+        //     {
+        //       path: '/predict',
+        //       method: 'post',
+        //       operationId: 'TranslateData',
+        //       requestInBody: true
+        //     }
+        //   ],
+        // }
+        const url = `${convertedSchema.info.server}${convertedSchema.routes[0].path}`
+        const method = convertedSchema.routes[0].method
+        const toolId = selectedTool.id
 
-      messages.push({ ...message, content: translatedContent })
-    } catch (error: any) {
-      console.error("Error translating content", error)
+        const translatedContent = await invokeToolApi(
+          url,
+          method,
+          message.content
+        )
+        //messages.push({ ...message, content: translatedContent })
+        responses.push(translatedContent || message.content)
+      } catch (error: any) {
+        console.error("Error converting OpenAPI schema", error)
+      }
     }
 
     const stream = new ReadableStream({
       start(controller) {
-        controller.enqueue(translatedContent)
+        //controller.enqueue(translatedContent)
+        for (const response of responses) {
+          controller.enqueue(response)
+        }
         controller.close()
       }
     })
 
     return new StreamingTextResponse(stream)
   } catch (error: any) {
-    console.error(error)
     const errorMessage = error.error?.message || "An unexpected error occurred"
     const errorCode = error.status || 500
     return new Response(JSON.stringify({ message: errorMessage }), {
       status: errorCode
     })
+  }
+}
+
+async function invokeToolApi(url: string, method: string, text: string) {
+  let translatedContent = text
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ text })
+    })
+    translatedContent = await response.text()
+
+    return translatedContent
+  } catch (error: any) {
+    console.error("Error translating content", error)
   }
 }
